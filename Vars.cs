@@ -3,6 +3,12 @@
     public class Vars
     {
         public static string ToParse = @"<p>
+{Wariant: Kolor szuflady}
+
+{Cecha: lóżka, wymiary}
+
+{Cecha: dupa}
+
 #IF{CECHA:Lóżka, wymiary}=99 X 9999
 {
 aaaaaaaaa

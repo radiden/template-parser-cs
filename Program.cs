@@ -32,15 +32,16 @@ namespace parser
                 cecha = "Lóżka, wymiary",
                 wartosc = "200 X 90"
             });
-            
+
             var sparsowanySzablon = ParsujSzablon(Vars.ToParse, warianty, cechy);
-            
+
             File.WriteAllText("output.html", sparsowanySzablon);
         }
 
         static string ParsujSzablon(string szablon, List<Wariant> warianty, List<Cecha> cechy)
         {
-            var typeexpr = @"(?i:#\s*(SWITCH|IF)\s*\{\s*(WARIANT|CECHA)\s*\:\s*(.*)\s*\})(?:\s*=\s*(.*))?";
+            // var typeexpr = @"(?i:#\s*(SWITCH|IF)\s*\{\s*(WARIANT|CECHA)\s*\:\s*(.*)\s*\})(?:\s*=\s*(.*))?";
+            var typeexpr = @"(?i:(?:#\s*)?(?:(SWITCH|IF)\s*)?\{\s*(WARIANT|CECHA)\s*\:\s*(.*)\s*\})(?:\s*=\s*(.*))?";
             var switchexpr = @"(?i:@\s*(DEFAULT|VALUE)\s*\:\s*(\w.*)?)";
 
             List<string> fixedSzablon = PoprawSzablon(szablon);
@@ -61,6 +62,18 @@ namespace parser
             {
                 switch (statement.Groups[1].Value.ToLower())
                 {
+                    case "":
+                        switch (statement.Groups[2].Value.ToLower())
+                        {
+                            case "cecha":
+                                nowySzablon = ZamienCecheNaWartosc(statement, fixedSzablon, cechy);
+                                break;
+                            case "wariant":
+                                nowySzablon = ZamienWariantNaWartosc(statement, fixedSzablon, warianty);
+                                break;
+                        }
+
+                        break;
                     case "if":
                         List<string> ifContent = ZnajdzObecnyIf(fixedSzablon, statement);
                         switch (statement.Groups[2].Value.ToLower())
@@ -72,6 +85,7 @@ namespace parser
                                 nowySzablon = IfWariant(fixedSzablon, ifContent, statement, warianty);
                                 break;
                         }
+
                         break;
                     case "switch":
                         List<string> switchContent = ZnajdzObecnySwitch(fixedSzablon, statement);
@@ -99,47 +113,12 @@ namespace parser
                         }
 
                         nowySzablon = ZamienNaWartosc(fixedSzablon, wartosc, switchContent);
-                        
-                        // List<string> defaultVal = new();
-                        // foreach (var value in switchvalues)
-                        // {
-                        //     switch (value.Groups[1].Value.ToLower())
-                        //     {
-                        //         case "default":
-                        //             defaultVal = ZnajdzTekst(switchContent, switchContent.FindIndex(s => s.StartsWith("@DEFAULT")));
-                        //             break;
-                        //         case "value":
-                        //             switch (statement.Groups[2].Value.ToLower())
-                        //             {
-                        //                 case "cecha":
-                        //                     if (cechy.Any(c => c.cecha.ToLower() == statement.Groups[3].Value.ToLower()))
-                        //                     {
-                        //                         if (cechy.Any(c => c.wartosc.ToLower() == value.Groups[2].Value.ToLower()))
-                        //                         {
-                        //                             if (switchContent.Any(s => s == value.Value))
-                        //                             {
-                        //                                 var wartosc = ZnajdzTekst(switchContent, switchContent.FindIndex(s => s == value.Value));
-                        //                             }
-                        //                             else
-                        //                             {
-                        //                                 var wartosc = "";
-                        //                             }
-                        //                         }
-                        //                     }
-                        //                     break;
-                        //                 case "wariant":
-                        //                     break;
-                        //             }
-                        //             break;
-                        //     }
-                        // }
-                        // switche.Add(switchContent);
                         break;
                 }
             }
 
             StringBuilder parsedSzablon = new();
-            
+
             foreach (var line in nowySzablon)
             {
                 parsedSzablon.Append(line + "\n");
@@ -151,19 +130,20 @@ namespace parser
         private static List<string> ZnajdzObecnySwitch(List<string> szablon, Match statement)
         {
             List<string> switchContent = new();
-            
+
             bool addLinesUntilEnd = false;
             foreach (var line in szablon)
             {
                 if (addLinesUntilEnd)
                 {
                     switchContent.Add(line);
-                                
+
                     if (line == "#ENDSWITCH")
                     {
                         break;
                     }
                 }
+
                 if (line == statement.Value)
                 {
                     switchContent.Add(line);
@@ -232,7 +212,8 @@ namespace parser
             return ret;
         }
 
-        private static List<string> ZnajdzWartoscDlaCechy(List<Match> values, List<string> switchContent, Match switchInfo, List<Cecha> cechy)
+        private static List<string> ZnajdzWartoscDlaCechy(List<Match> values, List<string> switchContent,
+            Match switchInfo, List<Cecha> cechy)
         {
             var defaultVal = ZnajdzTekst(switchContent, switchContent.FindIndex(s => s.StartsWith("@DEFAULT")));
             var cecha = cechy.FirstOrDefault(c => c.cecha.ToLower() == switchInfo.Groups[3].Value.ToLower());
@@ -245,14 +226,15 @@ namespace parser
                         return ZnajdzTekst(switchContent, switchContent.FindIndex(s => s == value.Value));
                     }
                 }
-                
+
                 return defaultVal;
             }
-            
+
             return defaultVal;
         }
 
-        private static List<string> ZnajdzWartoscDlaWariantu(List<Match> values, List<string> switchContent, Match switchInfo, List<Wariant> warianty)
+        private static List<string> ZnajdzWartoscDlaWariantu(List<Match> values, List<string> switchContent,
+            Match switchInfo, List<Wariant> warianty)
         {
             var defaultVal = ZnajdzTekst(switchContent, switchContent.FindIndex(s => s.StartsWith("@DEFAULT")));
             var wariant = warianty.FirstOrDefault(w => w.wariant.ToLower() == switchInfo.Groups[3].Value.ToLower());
@@ -265,25 +247,28 @@ namespace parser
                         return ZnajdzTekst(switchContent, switchContent.FindIndex(s => s == value.Value));
                     }
                 }
-                
+
                 return defaultVal;
             }
-            
+
             return defaultVal;
         }
 
-        private static List<string> ZamienNaWartosc(List<string> szablon, List<string> wartosc, List<string> operatorContent)
+        private static List<string> ZamienNaWartosc(List<string> szablon, List<string> wartosc,
+            List<string> operatorContent)
         {
             var operatorStart = szablon.FindIndex(s => s == operatorContent.First());
-            var operatorEnd = (Array.FindIndex(szablon.ToArray()[operatorStart..], s => s == operatorContent.Last())+operatorStart+1);
+            var operatorEnd = (Array.FindIndex(szablon.ToArray()[operatorStart..], s => s == operatorContent.Last()) +
+                               operatorStart + 1);
 
-            szablon.RemoveRange(operatorStart, operatorEnd-operatorStart);
+            szablon.RemoveRange(operatorStart, operatorEnd - operatorStart);
             szablon.InsertRange(operatorStart, wartosc);
 
             return szablon;
         }
 
-        private static List<string> IfCecha(List<string> szablon, List<string> obecnyIf, Match ifInfo, List<Cecha> cechy)
+        private static List<string> IfCecha(List<string> szablon, List<string> obecnyIf, Match ifInfo,
+            List<Cecha> cechy)
         {
             if (cechy.Any(c => c.cecha.ToLower() == ifInfo.Groups[3].Value.ToLower()))
             {
@@ -296,7 +281,8 @@ namespace parser
             return ZamienNaWartosc(szablon, new List<string>(), obecnyIf);
         }
 
-        private static List<string> IfWariant(List<string> szablon, List<string> obecnyIf, Match ifInfo, List<Wariant> warianty)
+        private static List<string> IfWariant(List<string> szablon, List<string> obecnyIf, Match ifInfo,
+            List<Wariant> warianty)
         {
             if (warianty.Any(w => w.wariant.ToLower() == ifInfo.Groups[3].Value.ToLower()))
             {
@@ -316,6 +302,7 @@ namespace parser
             {
                 ifTekst.Append(line + "\n");
             }
+
             var ifExpr = @"#IF.*\n*\{\n([\s\S]*?)(?=\})";
             var match = Regex.Match(ifTekst.ToString(), ifExpr);
 
@@ -326,5 +313,25 @@ namespace parser
 
             return ZamienNaWartosc(szablon, new List<string>(), obecnyIf);
         }
+
+        private static List<string> ZamienCecheNaWartosc(Match operatorInfo, List<string> szablon, List<Cecha> cechy)
+        {
+            var index = szablon.FindIndex(s => s.ToLower() == operatorInfo.Value.ToLower());
+            szablon[index] = (cechy.FirstOrDefault(c => c.cecha.ToLower() == operatorInfo.Groups[3].Value.ToLower()) ??
+                              new Cecha{ wartosc = "" }).wartosc;
+
+            return szablon;
+        }
+
+        private static List<string> ZamienWariantNaWartosc(Match operatorInfo, List<string> szablon, List<Wariant> warianty)
+        {
+            var index = szablon.FindIndex(s => s.ToLower() == operatorInfo.Value.ToLower());
+            szablon[index] = (warianty.FirstOrDefault(w => w.wariant.ToLower() == operatorInfo.Groups[3].Value.ToLower()) ??
+                              new Wariant{ wartosc = "" }).wartosc;
+
+            return szablon;
+        }
     }
 }
+    
+
